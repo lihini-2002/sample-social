@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Murmur Composer</title>
+<style>
+/* Layout: X-style three zones — icon nav rail, 600px timeline column with composer on top, quiet right rail (hidden on narrow screens) */
+:root {
+  --bg: #ffffff;
+  --fg: #0f1419;
+  --muted: #536471;
+  --line: #eff3f4;
+  --hover: #f7f9f9;
+  --accent: #0e8f7e;
+  --accent-hover: #0b7769;
+  --accent-soft: rgba(14, 143, 126, 0.12);
+  --warn: #c98200;
+  --danger: #e0245e;
+  --chip: #f7f9f9;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000; --fg: #e7e9ea; --muted: #71767b; --line: #2f3336; --hover: #16181c;
+    --accent: #1fb59f; --accent-hover: #189e8a; --accent-soft: rgba(31,181,159,0.16);
+    --warn: #ffad1f; --danger: #f4212e; --chip: #16181c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #000000; --fg: #e7e9ea; --muted: #71767b; --line: #2f3336; --hover: #16181c;
+  --accent: #1fb59f; --accent-hover: #189e8a; --accent-soft: rgba(31,181,159,0.16);
+  --warn: #ffad1f; --danger: #f4212e; --chip: #16181c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.35; margin: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg { display: block; }
+
+.shell { display: flex; justify-content: center; min-height: 100vh; }
+
+/* Left nav */
+.nav { width: 275px; flex-shrink: 0; padding: 4px 12px; position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; display: flex; flex-direction: column; gap: 2px; }
+.logo { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; color: var(--fg); }
+.logo:hover { background: var(--hover); }
+.nav-item { display: flex; align-items: center; gap: 20px; padding: 12px; border-radius: 999px; font-size: 20px; width: max-content; }
+.nav-item:hover { background: var(--hover); }
+.nav-item.active { font-weight: 700; }
+.nav-item svg { width: 26px; height: 26px; }
+.nav-post { margin-top: 16px; background: var(--fg); color: var(--bg); font-weight: 700; font-size: 17px; border-radius: 999px; height: 52px; width: 90%; }
+.nav-post:hover { opacity: .9; }
+.me { margin-top: auto; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 999px; }
+.me:hover { background: var(--hover); }
+.me-text { min-width: 0; }
+.me-name { font-weight: 700; }
+.me-handle { color: var(--muted); }
+
+/* Timeline column */
+.main { width: 600px; max-width: 100%; border-left: 1px solid var(--line); border-right: 1px solid var(--line); min-width: 0; }
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.topbar h1 { font-size: 20px; margin: 0; padding: 14px 16px 0; display: none; }
+.tabs { display: flex; }
+.tab { flex: 1; text-align: center; padding: 16px 0; color: var(--muted); font-weight: 500; position: relative; }
+.tab:hover { background: var(--hover); }
+.tab.active { color: var(--fg); font-weight: 700; }
+.tab.active::after { content: ""; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 56px; height: 4px; border-radius: 4px; background: var(--accent); }
+
+.avatar { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 15px; }
+.av-me { background: linear-gradient(135deg, #0e8f7e, #3a6fd8); }
+
+/* Composer */
+.composer { display: flex; gap: 12px; padding: 12px 16px 8px; border-bottom: 1px solid var(--line); }
+.composer-body { flex: 1; min-width: 0; }
+.audience { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); border: 1px solid var(--line); border-radius: 999px; padding: 1px 12px; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+#post-text { width: 100%; border: 0; resize: none; background: transparent; color: var(--fg); font: inherit; font-size: 20px; line-height: 1.3; padding: 10px 0; min-height: 56px; outline: none; overflow: hidden; }
+#post-text::placeholder { color: var(--muted); }
+.reply-scope { display: flex; align-items: center; gap: 4px; color: var(--accent); font-size: 14px; font-weight: 700; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+.composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; flex-wrap: wrap; }
+.tools { display: flex; margin-left: -8px; }
+.tool { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); }
+.tool:hover { background: var(--accent-soft); }
+.tool svg { width: 20px; height: 20px; }
+.send { display: flex; align-items: center; gap: 12px; }
+.counter { position: relative; width: 26px; height: 26px; display: grid; place-items: center; }
+.counter[hidden] { display: none !important; }
+.counter svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.counter-num { font-size: 12px; color: var(--muted); position: relative; font-variant-numeric: tabular-nums; }
+.counter-num.over { color: var(--danger); }
+.divider { width: 1px; height: 30px; background: var(--line); }
+.post-btn { background: var(--accent); color: #fff; font-weight: 700; border-radius: 999px; padding: 0 18px; height: 36px; }
+.post-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.post-btn:disabled { opacity: .5; cursor: default; }
+
+.show-new { display: block; width: 100%; padding: 14px; text-align: center; color: var(--accent); border-bottom: 1px solid var(--line); }
+.show-new:hover { background: var(--hover); }
+
+/* Feed */
+.post { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.post:hover { background: var(--hover); }
+.post-body { flex: 1; min-width: 0; }
+.post-head { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; }
+.post-name { font-weight: 700; }
+.post-meta { color: var(--muted); }
+.post-text { margin: 2px 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.post-actions { display: flex; justify-content: space-between; max-width: 425px; color: var(--muted); font-size: 13px; }
+.act { display: flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.act svg { width: 18px; height: 18px; }
+.post.fresh { animation: fresh 1.6s ease-out; }
+@keyframes fresh { from { background: var(--accent-soft); } to { background: transparent; } }
+
+/* Right rail */
+.side { width: 350px; flex-shrink: 0; padding: 8px 0 0 28px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; }
+.search { display: flex; align-items: center; gap: 12px; background: var(--chip); border-radius: 999px; padding: 10px 16px; color: var(--muted); border: 1px solid var(--line); }
+.search svg { width: 18px; height: 18px; }
+.panel { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.panel h2 { font-size: 20px; margin: 0; padding: 12px 16px; }
+.trend { padding: 12px 16px; }
+.trend:hover { background: var(--hover); }
+.trend small { color: var(--muted); font-size: 13px; display: block; }
+.trend b { display: block; margin: 2px 0; }
+
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--accent); color: #fff; padding: 12px 18px; border-radius: 6px; font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+
+@media (max-width: 1080px) { .side { display: none; } }
+@media (max-width: 1260px) {
+  .nav { width: 88px; align-items: center; }
+  .nav-item span, .nav-post-label, .me-text { display: none; }
+  .nav-post { width: 52px; height: 52px; font-size: 0; display: grid; place-items: center; }
+  .nav-post::before { content: "+"; font-size: 28px; font-weight: 400; }
+}
+@media (max-width: 640px) {
+  .nav { display: none; }
+  .main { border: 0; }
+  .topbar h1 { display: block; }
+}
+@media (prefers-reduced-motion: reduce) { .post.fresh { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <nav class="nav" aria-label="Primary">
+    <a class="logo" href="#" aria-label="Murmur home">
+      <svg viewBox="0 0 32 32" width="30" height="30" fill="currentColor" aria-hidden="true"><path d="M5 8c0-2.2 1.8-4 4-4h14c2.2 0 4 1.8 4 4v10c0 2.2-1.8 4-4 4h-8.5L8 28v-6.2C6.3 21.3 5 19.8 5 18V8zm6 5.5a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6zm5 0a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6zm5 0a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6z"/></svg>
+    </a>
+    <a class="nav-item active" href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.7 1.5 9.6l1.2 1.6L4 10.2V21a1 1 0 001 1h5v-7h4v7h5a1 1 0 001-1V10.2l1.3 1 1.2-1.6L12 1.7z"/></svg><span>Home</span></a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="7"/><path d="m20.5 20.5-5-5"/></svg><span>Explore</span></a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><span>Notifications</span></a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="m3 6 9 7 9-7"/></svg><span>Messages</span></a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Bookmarks</span></a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Profile</span></a>
+    <button class="nav-post" type="button" id="nav-post"><span class="nav-post-label">Post</span></button>
+    <div class="me">
+      <div class="avatar av-me" aria-hidden="true">Y</div>
+      <div class="me-text"><div class="me-name">You</div><div class="me-handle">@participant</div></div>
+    </div>
+  </nav>
+
+  <main class="main">
+    <header class="topbar">
+      <h1>Home</h1>
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true" type="button">For you</button>
+        <button class="tab" role="tab" aria-selected="false" type="button">Following</button>
+      </div>
+    </header>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <div class="avatar av-me" aria-hidden="true">Y</div>
+      <div class="composer-body">
+        <textarea id="post-text" name="post" rows="1" placeholder="What's happening?" aria-label="Post text" spellcheck="true"></textarea>
+        <div class="reply-scope">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z"/></svg>
+          Everyone can reply
+        </div>
+        <div class="composer-actions">
+          <div class="tools" aria-label="Add to post">
+            <button class="tool" type="button" title="Media" aria-label="Media"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-5-5-11 11"/></svg></button>
+            <button class="tool" type="button" title="GIF" aria-label="GIF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 10H8v4h2v-1.5M13 10v4M16.5 14v-4H18M16.5 12H18"/></svg></button>
+            <button class="tool" type="button" title="Poll" aria-label="Poll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h7"/></svg></button>
+            <button class="tool" type="button" title="Emoji" aria-label="Emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 007 0"/><circle cx="9" cy="10" r=".8" fill="currentColor"/><circle cx="15" cy="10" r=".8" fill="currentColor"/></svg></button>
+            <button class="tool" type="button" title="Schedule" aria-label="Schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
+            <button class="tool" type="button" title="Location" aria-label="Location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></button>
+          </div>
+          <div class="send">
+            <div class="counter" id="counter" hidden aria-live="polite">
+              <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
+                <circle cx="13" cy="13" r="10" fill="none" stroke="var(--line)" stroke-width="2.5"/>
+                <circle id="ring" cx="13" cy="13" r="10" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="62.83" stroke-dashoffset="62.83"/>
+              </svg>
+              <span class="counter-num" id="counter-num"></span>
+            </div>
+            <div class="divider" id="divider" hidden></div>
+            <button class="post-btn" id="post-btn" type="submit" disabled>Post</button>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <div id="feed">
+      <article class="post">
+        <div class="avatar" style="background:#c2410c" aria-hidden="true">M</div>
+        <div class="post-body">
+          <div class="post-head"><span class="post-name">Maya Chen</span><span class="post-meta">@mayabakes · 2h</span></div>
+          <p class="post-text">Third attempt at sourdough this week and it finally has an ear. The trick was a colder overnight proof.</p>
+          <div class="post-actions"><span class="act">💬 12</span><span class="act">🔁 4</span><span class="act">♡ 186</span><span class="act">📊 3.1K</span></div>
+        </div>
+      </article>
+      <article class="post">
+        <div class="avatar" style="background:#4338ca" aria-hidden="true">B</div>
+        <div class="post-body">
+          <div class="post-head"><span class="post-name">Brisbane Transit Watch</span><span class="post-meta">@bnetransit · 4h</span></div>
+          <p class="post-text">Weekend trackwork on the Ferny Grove line. Buses replace trains between Bowen Hills and Ferny Grove from Saturday 6am.</p>
+          <div class="post-actions"><span class="act">💬 31</span><span class="act">🔁 58</span><span class="act">♡ 102</span><span class="act">📊 12K</span></div>
+        </div>
+      </article>
+      <article class="post">
+        <div class="avatar" style="background:#15803d" aria-hidden="true">D</div>
+        <div class="post-body">
+          <div class="post-head"><span class="post-name">Dev Patel</span><span class="post-meta">@devruns · 6h</span></div>
+          <p class="post-text">Signed up for my first half marathon in November. Training plan starts Monday. Any tips for not dying at km 18?</p>
+          <div class="post-actions"><span class="act">💬 47</span><span class="act">🔁 2</span><span class="act">♡ 240</span><span class="act">📊 5.8K</span></div>
+        </div>
+      </article>
+    </div>
+  </main>
+
+  <aside class="side" aria-label="Trends">
+    <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7"/><path d="m20.5 20.5-5-5"/></svg>Search</div>
+    <section class="panel">
+      <h2>What's happening</h2>
+      <div class="trend"><small>Sport · Trending</small><b>#AFLGF</b><small>24.1K posts</small></div>
+      <div class="trend"><small>Trending in Australia</small><b>Daylight saving</b><small>8,412 posts</small></div>
+      <div class="trend"><small>Technology · Trending</small><b>Password managers</b><small>3,055 posts</small></div>
+      <div class="trend"><small>Food · Trending</small><b>Lamington</b><small>1,920 posts</small></div>
+    </section>
+  </aside>
+</div>
+
+<div class="toast" id="toast" role="status" hidden>Your post was sent.</div>
+
+<script>
+(function () {
+  var LIMIT = 280, CIRC = 62.83;
+  var ta = document.getElementById('post-text');
+  var btn = document.getElementById('post-btn');
+  var counter = document.getElementById('counter');
+  var num = document.getElementById('counter-num');
+  var ring = document.getElementById('ring');
+  var divider = document.getElementById('divider');
+  var feed = document.getElementById('feed');
+  var toast = document.getElementById('toast');
+  var toastTimer;
+
+  function grow() { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+
+  function update() {
+    grow();
+    var len = Array.from(ta.value).length;
+    var left = LIMIT - len;
+    var has = ta.value.trim().length > 0;
+    btn.disabled = !has || left < 0;
+    counter.hidden = divider.hidden = len === 0;
+    ring.setAttribute('stroke-dashoffset', String(CIRC * (1 - Math.min(len, LIMIT) / LIMIT)));
+    ring.setAttribute('stroke', left < 0 ? 'var(--danger)' : left <= 20 ? 'var(--warn)' : 'var(--accent)');
+    num.textContent = left <= 20 ? String(left) : '';
+    num.classList.toggle('over', left < 0);
+  }
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  document.getElementById('composer').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (btn.disabled) return;
+    var post = el('article', 'post fresh');
+    var av = el('div', 'avatar av-me', 'Y'); av.setAttribute('aria-hidden', 'true');
+    var body = el('div', 'post-body');
+    var head = el('div', 'post-head');
+    head.append(el('span', 'post-name', 'You'), el('span', 'post-meta', '@participant · now'));
+    var acts = el('div', 'post-actions');
+    ['💬 0', '🔁 0', '♡ 0', '📊 1'].forEach(function (t) { acts.append(el('span', 'act', t)); });
+    body.append(head, el('p', 'post-text', ta.value), acts);
+    post.append(av, body);
+    feed.prepend(post);
+    document.dispatchEvent(new CustomEvent('murmur:posted', { detail: { text: ta.value, at: new Date().toISOString() } }));
+    ta.value = '';
+    update();
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.hidden = true; }, 2600);
+  });
+
+  ta.addEventListener('input', update);
+  ta.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') document.getElementById('composer').requestSubmit();
+  });
+  document.getElementById('nav-post').addEventListener('click', function () { ta.focus(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  update();
+})();
+</script>
+</body>
+</html>
